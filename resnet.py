@@ -15,6 +15,8 @@ import time
 import os
 import copy
 import csv
+import math
+from loader import SketchDataSet
 
 
 # Data augmentation and normalization for training
@@ -23,6 +25,23 @@ data_transforms = {
     'train': transforms.Compose([
         transforms.RandomResizedCrop(224),
         transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+    ]),
+    'val': transforms.Compose([
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
+        transforms.ToTensor(),
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+    ]),
+}
+
+regress_data_transforms = {
+    'train': transforms.Compose([
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
+        # transforms.RandomResizedCrop(224),
+        # transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ]),
@@ -115,7 +134,7 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
     model.load_state_dict(best_model_wts)
     return model
 
-def train_model_regress(model, labels, criterion, optimizer, scheduler, num_epochs=25):
+def regress_train_model(model, criterion, optimizer, scheduler, num_epochs=25):
     since = time.time()
 
     best_model_wts = copy.deepcopy(model.state_dict())
@@ -137,7 +156,7 @@ def train_model_regress(model, labels, criterion, optimizer, scheduler, num_epoc
             running_corrects = 0
 
             # Iterate over data.
-            for inputs in dataloaders[phase]:
+            for inputs, labels in dataloaders[phase]:
                 inputs = inputs.to(device)
                 labels = labels.to(device)
 
@@ -148,7 +167,7 @@ def train_model_regress(model, labels, criterion, optimizer, scheduler, num_epoc
                 # track history if only in train
                 with torch.set_grad_enabled(phase == 'train'):
                     outputs = model(inputs)
-                    _, preds = torch.max(outputs, 1)
+                    #_, preds = torch.max(outputs, 1)
                     loss = criterion(outputs, labels)
 
                     # backward + optimize only if in training phase
@@ -158,10 +177,11 @@ def train_model_regress(model, labels, criterion, optimizer, scheduler, num_epoc
 
                 # statistics
                 running_loss += loss.item() * inputs.size(0)
-                running_corrects += torch.sum(preds == labels.data)
+                #running_corrects += torch.sum(preds == labels.data)
+                running_corrects += 2.0 - math.sqrt((torch.mean(torch.pow(outputs-labels, 2))))
 
             epoch_loss = running_loss / dataset_sizes[phase]
-            epoch_acc = running_corrects.double() / dataset_sizes[phase]
+            epoch_acc = running_corrects / dataset_sizes[phase]
 
             print('{} Loss: {:.4f} Acc: {:.4f}'.format(
                 phase, epoch_loss, epoch_acc))
@@ -228,11 +248,7 @@ def create_labels_from_csv(filename):
         print(y.shape)
         return y
 
-
-
-if __name__ == '__main__':
-    create_labels_from_csv('data/sketch-gen/params.csv')
-    #exit(0)
+def classify():
     data_dir = 'data/hymenoptera_data'
     image_datasets = {x: datasets.ImageFolder(os.path.join(data_dir, x),
                                               data_transforms[x])
@@ -261,8 +277,7 @@ if __name__ == '__main__':
 
     model_ft = model_ft.to(device)
 
-    #criterion = nn.CrossEntropyLoss()
-    criterion = nn.MSELoss()
+    criterion = nn.CrossEntropyLoss()
 
     # Observe that all parameters are being optimized
     optimizer_ft = optim.SGD(model_ft.parameters(), lr=0.001, momentum=0.9)
@@ -275,3 +290,55 @@ if __name__ == '__main__':
 
     # model_ft.load_state_dict(torch.load('model/best_resnet.pth'))
     # visualize_model(model_ft);
+
+def regress():
+    global dataloaders, dataset_sizes, device
+    data_dir = 'data/sketch-gen'
+    image_datasets = {x: SketchDataSet.SketchDataSet('curve_params.csv', os.path.join(data_dir, x),
+                                              regress_data_transforms[x])
+                      for x in ['train', 'val']}
+
+    dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=4,
+                                                  shuffle=True, num_workers=4)
+                   for x in ['train', 'val']}
+    dataset_sizes = {x: len(image_datasets[x]) for x in ['train', 'val']}
+    class_names = image_datasets['train'].curve_param_names
+
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+
+    # Get a batch of training data
+    inputs, classes = next(iter(dataloaders['train']))
+
+    # Make a grid from batch
+    out = torchvision.utils.make_grid(inputs)
+
+    #plt.ion()   # interactive mode
+    #imshow(out, title=[class_names for x in classes])
+
+    model_ft = models.resnet18(pretrained=True)
+    num_ftrs = model_ft.fc.in_features
+    model_ft.fc = nn.Linear(num_ftrs, 16)
+
+    model_ft = model_ft.to(device)
+
+    #criterion = nn.CrossEntropyLoss()
+    criterion = nn.MSELoss()
+
+    # Observe that all parameters are being optimized
+    optimizer_ft = optim.SGD(model_ft.parameters(), lr=0.001, momentum=0.9)
+
+    # Decay LR by a factor of 0.1 every 7 epochs
+    exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=7, gamma=0.1)
+
+    model_ft = regress_train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler,
+                           num_epochs=5)
+
+    # model_ft.load_state_dict(torch.load('model/best_resnet.pth'))
+    # visualize_model(model_ft);
+
+
+if __name__ == '__main__':
+    regress()
+    #create_labels_from_csv('data/sketch-gen/params.csv')
+    #exit(0)
