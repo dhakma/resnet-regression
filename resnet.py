@@ -178,7 +178,7 @@ def regress_train_model(model, criterion, optimizer, scheduler, num_epochs=25):
                 # statistics
                 running_loss += loss.item() * inputs.size(0)
                 #running_corrects += torch.sum(preds == labels.data)
-                running_corrects += 2.0 - math.sqrt((torch.mean(torch.pow(outputs-labels, 2))))
+                running_corrects += (2.0 - math.sqrt((torch.mean(torch.pow(outputs-labels, 2))))) / 2.0
 
             epoch_loss = running_loss / dataset_sizes[phase]
             epoch_acc = running_corrects / dataset_sizes[phase]
@@ -230,6 +230,45 @@ def visualize_model(model, num_images=6):
                     return
         plt.show(block=True)
         model.train(mode=was_training)
+
+from matplotlib.pyplot import cm
+
+def regression_visualize_model(model, num_images=6):
+    model.eval();
+    curr_img_cnt = 0
+
+    color = iter(cm.rainbow(np.linspace(0, 1, num_images)))
+
+    with torch.no_grad():
+        for i, (inputs, ground_truth) in enumerate(dataloaders['val']):
+            inputs = inputs.to(device)
+            #grounnd_truth = outputs.to(device)
+
+            outputs = model(inputs).cpu().detach().numpy()
+            ground_truth = ground_truth.cpu().detach().numpy()
+
+
+            x = np.arange(outputs.shape[1])
+
+            for j in range(inputs.size()[0]):
+                c = next(color)
+                c = np.reshape(c, -1)
+                curr_img_cnt += 1
+                ax = plt.subplot(num_images//4, 4, curr_img_cnt)
+                # plt.scatter(x, outputs[j], s=20, marker='o', c=c)
+                # plt.scatter(x, ground_truth[j], s=20, marker='^', c=c)
+                l1 = plt.plot(x, outputs[j], '.r-', label='predicted')
+                l2 = plt.plot(x, ground_truth[j], 'xb-', label='ground truth')
+                # l1 = plt.plot(x, outputs[j], '.r-')
+                # l2 = plt.plot(x, ground_truth[j], 'xb-')
+
+                if curr_img_cnt == num_images:
+                    plt.figlegend(loc='upper left', ncol=1)
+                    plt.show(block=True)
+                    return
+
+
+
 
 def create_labels_from_csv(filename):
     line_cnt = 0
@@ -291,7 +330,7 @@ def classify():
     # model_ft.load_state_dict(torch.load('model/best_resnet.pth'))
     # visualize_model(model_ft);
 
-def regress():
+def regress(should_train=False):
     global dataloaders, dataset_sizes, device
     data_dir = 'data/sketch-gen'
     image_datasets = {x: SketchDataSet.SketchDataSet('curve_params.csv', os.path.join(data_dir, x),
@@ -322,23 +361,25 @@ def regress():
 
     model_ft = model_ft.to(device)
 
+    if (should_train):
     #criterion = nn.CrossEntropyLoss()
-    criterion = nn.MSELoss()
+        criterion = nn.MSELoss()
 
-    # Observe that all parameters are being optimized
-    optimizer_ft = optim.SGD(model_ft.parameters(), lr=0.001, momentum=0.9)
+        # Observe that all parameters are being optimized
+        optimizer_ft = optim.SGD(model_ft.parameters(), lr=0.001, momentum=0.9)
 
-    # Decay LR by a factor of 0.1 every 7 epochs
-    exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=7, gamma=0.1)
+        # Decay LR by a factor of 0.1 every 7 epochs
+        exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=7, gamma=0.1)
 
-    model_ft = regress_train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler,
-                           num_epochs=5)
-
-    # model_ft.load_state_dict(torch.load('model/best_resnet.pth'))
+        model_ft = regress_train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler,
+                               num_epochs=250)
+    else:
+        model_ft.load_state_dict(torch.load('model/best_resnet.pth'))
+        regression_visualize_model(model_ft, 24)
     # visualize_model(model_ft);
 
 
 if __name__ == '__main__':
-    regress()
+    regress(should_train=False)
     #create_labels_from_csv('data/sketch-gen/params.csv')
     #exit(0)
