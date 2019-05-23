@@ -17,6 +17,8 @@ import copy
 import csv
 import math
 from loader import SketchDataSet
+import argparse
+from utils import VisdomPlotter
 
 
 # Data augmentation and normalization for training
@@ -139,6 +141,7 @@ def regress_train_model(model, criterion, optimizer, scheduler, num_epochs=25):
 
     best_model_wts = copy.deepcopy(model.state_dict())
     best_acc = 0.0
+    plotter = VisdomPlotter.VisdomLinePlotter(env_name='main')
 
     for epoch in range(num_epochs):
         print('Epoch {}/{}'.format(epoch, num_epochs - 1))
@@ -178,10 +181,13 @@ def regress_train_model(model, criterion, optimizer, scheduler, num_epochs=25):
                 # statistics
                 running_loss += loss.item() * inputs.size(0)
                 #running_corrects += torch.sum(preds == labels.data)
-                running_corrects += (2.0 - math.sqrt((torch.mean(torch.pow(outputs-labels, 2))))) / 2.0
+                # running_corrects += (1.0 - math.sqrt((torch.mean(torch.pow(outputs-labels, 2))))) / 1.0
 
             epoch_loss = running_loss / dataset_sizes[phase]
-            epoch_acc = running_corrects / dataset_sizes[phase]
+            epoch_acc = 1 - epoch_loss
+
+            plotter.plot('loss', phase, 'MSE Loss', epoch, epoch_loss)
+            plotter.plot('acc', phase, 'Regression Acc', epoch, epoch_acc)
 
             print('{} Loss: {:.4f} Acc: {:.4f}'.format(
                 phase, epoch_loss, epoch_acc))
@@ -332,7 +338,7 @@ def classify():
 
 def regress(should_train=False):
     global dataloaders, dataset_sizes, device
-    data_dir = 'data/sketch-gen'
+    # data_dir = 'data/sketch-gen'
     image_datasets = {x: SketchDataSet.SketchDataSet('curve_params.csv', os.path.join(data_dir, x),
                                               regress_data_transforms[x])
                       for x in ['train', 'val']}
@@ -380,6 +386,17 @@ def regress(should_train=False):
 
 
 if __name__ == '__main__':
-    regress(should_train=False)
+    global data_dir
+    parser = argparse.ArgumentParser();
+    parser.add_argument('--data_dir', type=str, default='data/sketchgen')
+    parser.add_argument('--train', action='store_true')
+    # parser.add_argument('--train', nargs='?', type=bool, const=False, default=True)
+    args = parser.parse_args()
+
+    data_dir = args.data_dir
+    should_train = args.train
+
+    regress(should_train)
+
     #create_labels_from_csv('data/sketch-gen/params.csv')
     #exit(0)
