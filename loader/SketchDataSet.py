@@ -31,3 +31,22 @@ class SketchDataSet(Dataset):
         if self.transform:
             sample = self.transform(sample)
         return sample, curve_params
+
+
+class SketchTestDataSet(Dataset):
+
+    def __init__(self, root_dir, transform=None):
+        self.root_dir = root_dir
+        self.transform = transform
+        self.files = [os.path.join(root_dir, f) for f in os.listdir(root_dir) if os.path.isfile(os.path.join(root_dir, f))]
+
+    def __len__(self):
+        return len(self.files)
+
+    def __getitem__(self, idx):
+        file = self.files[idx]
+        img = Image.open(file)
+        if self.transform:
+            img = self.transform(img)
+
+        return file, img

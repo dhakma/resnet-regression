@@ -19,6 +19,7 @@ import math
 from loader import SketchDataSet
 import argparse
 from utils import VisdomPlotter
+import pandas as pd
 
 
 # Data augmentation and normalization for training
@@ -274,6 +275,22 @@ def regression_visualize_model(model, num_images=6):
                     return
 
 
+def regression_test(model):
+    model.eval();
+
+    arr = []
+    with torch.no_grad():
+        for i, (files, inputs) in enumerate(dataloaders['test']):
+            inputs = inputs.to(device)
+            outputs = model(inputs).cpu().detach().numpy()
+
+            for j in range(inputs.size()[0]):
+                csv_row = outputs[j].tolist()
+                csv_row.insert(0, os.path.basename(files[j]))
+                arr.append(csv_row)
+
+    a = np.array(arr)
+    pd.DataFrame(a).to_csv("output.csv", header=None, index=None)
 
 
 def create_labels_from_csv(filename):
@@ -336,16 +353,17 @@ def classify():
     # model_ft.load_state_dict(torch.load('model/best_resnet.pth'))
     # visualize_model(model_ft);
 
-def regress(should_train=False):
+def regress(should_train=False, should_test=True):
     global dataloaders, dataset_sizes, device
     # data_dir = 'data/sketch-gen'
     image_datasets = {x: SketchDataSet.SketchDataSet('curve_params.csv', os.path.join(data_dir, x),
                                               regress_data_transforms[x])
                       for x in ['train', 'val']}
+    image_datasets['test'] = SketchDataSet.SketchTestDataSet(os.path.join(test_data_dir), regress_data_transforms['val'])
 
     dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=4,
                                                   shuffle=True, num_workers=4)
-                   for x in ['train', 'val']}
+                   for x in ['train', 'val', 'test']}
     dataset_sizes = {x: len(image_datasets[x]) for x in ['train', 'val']}
     class_names = image_datasets['train'].curve_param_names
 
@@ -379,21 +397,25 @@ def regress(should_train=False):
 
         model_ft = regress_train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler,
                                num_epochs=250)
+    elif should_test:
+        model_ft.load_state_dict(torch.load('model/best_resnet.pth'))
+        regression_test(model_ft)
     else:
         model_ft.load_state_dict(torch.load('model/best_resnet.pth'))
         regression_visualize_model(model_ft, 24)
-    # visualize_model(model_ft);
 
 
 if __name__ == '__main__':
-    global data_dir
+    global data_dir, test_data_dir
     parser = argparse.ArgumentParser();
     parser.add_argument('--data_dir', type=str, default='data/sketchgen')
     parser.add_argument('--train', action='store_true')
+    parser.add_argument('--test', action='store_true')
     # parser.add_argument('--train', nargs='?', type=bool, const=False, default=True)
     args = parser.parse_args()
 
     data_dir = args.data_dir
+    test_data_dir = os.path.join(data_dir, 'test')
     should_train = args.train
 
     regress(should_train)
