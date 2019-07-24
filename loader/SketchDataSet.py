@@ -32,6 +32,9 @@ class SketchDataSet(Dataset):
             sample = self.transform(sample)
         return sample, curve_params
 
+    def get_output_params(self):
+        return self.curve_params
+
 
 class SketchTestDataSet(Dataset):
 
