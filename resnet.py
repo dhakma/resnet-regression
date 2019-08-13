@@ -113,6 +113,7 @@ def regress_train_model(model, criterion, optimizer, scheduler, num_epochs=25):
                         optimizer.step()
 
                 # statistics
+                print('{} loss item {:.4f} input size : {:d}', loss.item(), inputs.size(0))
                 running_loss += loss.item() * inputs.size(0)
                 #running_corrects += torch.sum(preds == labels.data)
                 # running_corrects += (1.0 - math.sqrt((torch.mean(torch.pow(outputs-labels, 2))))) / 1.0
