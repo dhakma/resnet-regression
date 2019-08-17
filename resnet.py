@@ -21,7 +21,7 @@ import argparse
 from utils import VisdomPlotter
 import pandas as pd
 from matplotlib.pyplot import cm
-
+from PIL import Image
 
 # Data augmentation and normalization for training
 # Just normalization for validation
@@ -57,6 +57,7 @@ regress_data_transforms = {
     ]),
 }
 
+
 def imshow(inp, title=None):
     """Imshow for Tensor."""
     inp = inp.numpy().transpose((1, 2, 0))
@@ -87,7 +88,7 @@ def regress_train_model(model, criterion, optimizer, scheduler, num_epochs=25):
                 scheduler.step()
                 model.train()  # Set model to training mode
             else:
-                model.eval()   # Set model to evaluate mode
+                model.eval()  # Set model to evaluate mode
 
             running_loss = 0.0
             running_corrects = 0
@@ -104,7 +105,7 @@ def regress_train_model(model, criterion, optimizer, scheduler, num_epochs=25):
                 # track history if only in train
                 with torch.set_grad_enabled(phase == 'train'):
                     outputs = model(inputs)
-                    #_, preds = torch.max(outputs, 1)
+                    # _, preds = torch.max(outputs, 1)
                     loss = criterion(outputs, labels)
 
                     # backward + optimize only if in training phase
@@ -115,7 +116,7 @@ def regress_train_model(model, criterion, optimizer, scheduler, num_epochs=25):
                 # statistics
                 print('{} loss item {:.4f} input size : {:d}', loss.item(), inputs.size(0))
                 running_loss += loss.item() * inputs.size(0)
-                #running_corrects += torch.sum(preds == labels.data)
+                # running_corrects += torch.sum(preds == labels.data)
                 # running_corrects += (1.0 - math.sqrt((torch.mean(torch.pow(outputs-labels, 2))))) / 1.0
 
             epoch_loss = running_loss / dataset_sizes[phase]
@@ -154,11 +155,10 @@ def regression_visualize_model(model, num_images=6):
     with torch.no_grad():
         for i, (inputs, ground_truth) in enumerate(dataloaders['val']):
             inputs = inputs.to(device)
-            #grounnd_truth = outputs.to(device)
+            # grounnd_truth = outputs.to(device)
 
             outputs = model(inputs).cpu().detach().numpy()
             ground_truth = ground_truth.cpu().detach().numpy()
-
 
             x = np.arange(outputs.shape[1])
 
@@ -166,7 +166,7 @@ def regression_visualize_model(model, num_images=6):
                 c = next(color)
                 c = np.reshape(c, -1)
                 curr_img_cnt += 1
-                ax = plt.subplot(num_images//4, 4, curr_img_cnt)
+                ax = plt.subplot(num_images // 4, 4, curr_img_cnt)
                 # plt.scatter(x, outputs[j], s=20, marker='o', c=c)
                 # plt.scatter(x, ground_truth[j], s=20, marker='^', c=c)
                 l1 = plt.plot(x, outputs[j], '.r-', label='predicted')
@@ -220,9 +220,10 @@ def regress(should_train=False, should_test=True):
     global dataloaders, dataset_sizes, device
     # data_dir = 'data/sketch-gen'
     image_datasets = {x: SketchDataSet.SketchDataSet('curve_params.csv', os.path.join(data_dir, x),
-                                              regress_data_transforms[x])
+                                                     regress_data_transforms[x])
                       for x in ['train', 'val']}
-    image_datasets['test'] = SketchDataSet.SketchTestDataSet(os.path.join(test_data_dir), regress_data_transforms['val'])
+    image_datasets['test'] = SketchDataSet.SketchTestDataSet(os.path.join(test_data_dir),
+                                                             regress_data_transforms['val'])
 
     dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=4,
                                                   shuffle=True, num_workers=4)
@@ -232,16 +233,14 @@ def regress(should_train=False, should_test=True):
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-
-
     # Get a batch of training data
     inputs, curve_params = next(iter(dataloaders['train']))
 
     # Make a grid from batch
     out = torchvision.utils.make_grid(inputs)
 
-    #plt.ion()   # interactive mode
-    #imshow(out, title=[class_names for x in classes])
+    # plt.ion()   # interactive mode
+    # imshow(out, title=[class_names for x in classes])
 
     model_ft = models.resnet18(pretrained=True)
     num_ftrs = model_ft.fc.in_features
@@ -255,7 +254,7 @@ def regress(should_train=False, should_test=True):
     model_ft = model_ft.to(device)
 
     if (should_train):
-    #criterion = nn.CrossEntropyLoss()
+        # criterion = nn.CrossEntropyLoss()
         criterion = nn.MSELoss()
 
         # Observe that all parameters are being optimized
@@ -265,13 +264,69 @@ def regress(should_train=False, should_test=True):
         exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=7, gamma=0.1)
 
         model_ft = regress_train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler,
-                               num_epochs=250)
+                                       num_epochs=250)
     elif should_test:
         model_ft.load_state_dict(torch.load('model/best_resnet.pth'))
         regression_test(model_ft)
     else:
         model_ft.load_state_dict(torch.load('model/best_resnet.pth'))
         regression_visualize_model(model_ft, 24)
+
+
+class SketchInfer:
+    def __init__(self, data_dir):
+        self.model_ft = None
+        self.data_dir = data_dir
+        self.save_name = os.path.basename(data_dir)
+        self.device = None
+        self.regress_data_transforms = {
+            'train': transforms.Compose([
+                transforms.Resize(256),
+                transforms.CenterCrop(224),
+                # transforms.RandomResizedCrop(224),
+                # transforms.RandomHorizontalFlip(),
+                transforms.ToTensor(),
+                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+            ]),
+            'val': transforms.Compose([
+                transforms.Resize(256),
+                transforms.CenterCrop(224),
+                transforms.ToTensor(),
+                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+            ]),
+        }
+
+    def load_model(self):
+        image_datasets = {x: SketchDataSet.SketchDataSet('curve_params.csv', os.path.join(self.data_dir, x),
+                                                         self.regress_data_transforms[x])
+                          for x in ['train']}
+
+        dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=4,
+                                                      shuffle=True, num_workers=4)
+                       for x in ['train']}
+
+        inputs, curve_params = next(iter(dataloaders['train']))
+        model_ft = models.resnet18(pretrained=True)
+        num_ftrs = model_ft.fc.in_features
+
+        # setting number of params
+        print("Curve parameters size : ", curve_params.shape)
+        output_layer_size = curve_params.shape[1]
+        print("Setting output layer size to : ", output_layer_size)
+        model_ft.fc = nn.Linear(num_ftrs, output_layer_size)
+
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self.model_ft = model_ft.to(self.device)
+        model_name = os.path.join('model', self.save_name + '.pth');
+        self.model_ft.load_state_dict(torch.load(model_name))
+
+    def infer_img(self, img_numpy):
+        sample = Image.fromarray(img_numpy);
+        inputs = self.regress_data_transforms['val'](sample)
+        inputs = inputs.unsqueeze(0)
+        inputs = inputs.to(self.device)
+        outputs = self.model_ft(inputs).cpu().detach().numpy()
+        return outputs[0]
 
 
 if __name__ == '__main__':
@@ -290,5 +345,5 @@ if __name__ == '__main__':
 
     regress(should_train)
 
-    #create_labels_from_csv('data/sketch-gen/params.csv')
-    #exit(0)
+    # create_labels_from_csv('data/sketch-gen/params.csv')
+    # exit(0)
