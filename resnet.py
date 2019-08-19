@@ -4,6 +4,7 @@
 from __future__ import print_function, division
 
 import torch
+torch.cuda.current_device()
 import torch.nn as nn
 import torch.optim as optim
 from torch.optim import lr_scheduler
@@ -147,6 +148,7 @@ def regress_train_model(model, criterion, optimizer, scheduler, num_epochs=25):
 
 
 def regression_visualize_model(model, num_images=6):
+    print("validating")
     model.eval();
     curr_img_cnt = 0
 
@@ -178,6 +180,10 @@ def regression_visualize_model(model, num_images=6):
                     plt.figlegend(loc='upper left', ncol=1)
                     plt.show(block=True)
                     return
+
+    plt.figlegend(loc='upper left', ncol=1)
+    plt.show(block=True)
+    plt.savefig('val_result.png')
 
 
 def regression_test(model):
@@ -242,7 +248,7 @@ def regress(should_train=False, should_test=True):
     # plt.ion()   # interactive mode
     # imshow(out, title=[class_names for x in classes])
 
-    model_ft = models.resnet18(pretrained=True)
+    model_ft = models.resnet18(pretrained=should_train)
     num_ftrs = model_ft.fc.in_features
 
     # setting number of params
@@ -253,6 +259,7 @@ def regress(should_train=False, should_test=True):
 
     model_ft = model_ft.to(device)
 
+    model_name = os.path.join('model', save_name + '.pth')
     if (should_train):
         # criterion = nn.CrossEntropyLoss()
         criterion = nn.MSELoss()
@@ -266,10 +273,10 @@ def regress(should_train=False, should_test=True):
         model_ft = regress_train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler,
                                        num_epochs=250)
     elif should_test:
-        model_ft.load_state_dict(torch.load('model/best_resnet.pth'))
+        model_ft.load_state_dict(torch.load(model_name))
         regression_test(model_ft)
     else:
-        model_ft.load_state_dict(torch.load('model/best_resnet.pth'))
+        model_ft.load_state_dict(torch.load(model_name))
         regression_visualize_model(model_ft, 24)
 
 
@@ -306,7 +313,8 @@ class SketchInfer:
                        for x in ['train']}
 
         inputs, curve_params = next(iter(dataloaders['train']))
-        model_ft = models.resnet18(pretrained=True)
+        # model_ft = models.resnet18(pretrained=True)
+        model_ft = models.resnet18()
         num_ftrs = model_ft.fc.in_features
 
         # setting number of params
@@ -319,9 +327,11 @@ class SketchInfer:
         self.model_ft = model_ft.to(self.device)
         model_name = os.path.join('model', self.save_name + '.pth');
         self.model_ft.load_state_dict(torch.load(model_name))
+        self.model_ft.eval();
 
     def infer_img(self, img_numpy):
         sample = Image.fromarray(img_numpy);
+        sample.save('test.png');
         inputs = self.regress_data_transforms['val'](sample)
         inputs = inputs.unsqueeze(0)
         inputs = inputs.to(self.device)
@@ -343,7 +353,7 @@ if __name__ == '__main__':
     should_train = args.train
     save_name = os.path.basename(data_dir)
 
-    regress(should_train)
+    regress(should_train, args.test)
 
     # create_labels_from_csv('data/sketch-gen/params.csv')
     # exit(0)

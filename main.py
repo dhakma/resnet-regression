@@ -63,4 +63,5 @@ if __name__ == '__main__':
     # api = Api(app)
     # api.add_resource(User, "/user/<string:name>")
     # api.add_resource(ImgInfer, "/imginfer")
-    app.run(debug=True)
+    #app.run(debug=True)
+    app.run()

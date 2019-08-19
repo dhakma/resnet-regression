@@ -41,7 +41,7 @@ class SketchTestDataSet(Dataset):
     def __init__(self, root_dir, transform=None):
         self.root_dir = root_dir
         self.transform = transform
-        self.files = [os.path.join(root_dir, f) for f in os.listdir(root_dir) if os.path.isfile(os.path.join(root_dir, f))]
+        self.files = [os.path.join(root_dir, f) for f in os.listdir(root_dir) if os.path.isfile(os.path.join(root_dir, f)) and os.path.splitext(f)[1] == '.png']
 
     def __len__(self):
         return len(self.files)
