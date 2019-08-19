@@ -248,7 +248,7 @@ def regress(should_train=False, should_test=True):
     # plt.ion()   # interactive mode
     # imshow(out, title=[class_names for x in classes])
 
-    model_ft = models.resnet18(pretrained=should_train)
+    model_ft = models.resnet101(pretrained=should_train)
     num_ftrs = model_ft.fc.in_features
 
     # setting number of params
