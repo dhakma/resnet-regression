@@ -3,6 +3,7 @@ from flask_restful import Api, Resource, reqparse
 from flask import Flask, request, jsonify
 from resnet import SketchInfer
 import numpy as np
+import argparse
 
 users = [
     {
@@ -28,8 +29,9 @@ app = Flask(__name__)
 @app.route('/imginfer', methods=['GET', 'POST'])
 def infer():
     content = request.json
-    img_numpy = np.array(content['img']).astype(np.uint8)
-    output_params = inference_engine.infer_img(img_numpy)
+    img_numpy = np.array(content['imgs']).astype(np.uint8)
+    # output_params = inference_engine.infer_img(img_numpy)
+    output_params = inference_engine.infer_imgs(img_numpy)
     print(output_params)
     return jsonify({"params": output_params.tolist()})
 
@@ -58,7 +60,10 @@ class ImgInfer(Resource):
 
 if __name__ == '__main__':
     global inference_engine
-    inference_engine = SketchInfer('data/multi-people-path-sketch-gen-1')
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--data_dir', type=str, required=True)
+    args = parser.parse_args()
+    inference_engine = SketchInfer(args.data_dir)
     inference_engine.load_model();
     # api = Api(app)
     # api.add_resource(User, "/user/<string:name>")
