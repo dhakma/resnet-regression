@@ -207,8 +207,9 @@ def classify(should_train=False, should_test=True):
     num_ftrs = model_ft.fc.in_features
 
     # setting number of params
-    print("class size : ", len(classes))
-    output_layer_size = len(classes)
+    num_classes = len(class_names)
+    print("class size : ", num_classes, class_names)
+    output_layer_size = num_classes
     print("Setting output layer size to : ", output_layer_size)
     model_ft.fc = nn.Linear(num_ftrs, output_layer_size)
 
