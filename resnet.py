@@ -249,7 +249,7 @@ def regress(should_train=False, should_test=True):
     # plt.ion()   # interactive mode
     # imshow(out, title=[class_names for x in classes])
 
-    model_ft = models.resnet101(pretrained=should_train)
+    model_ft = models.resnet18(pretrained=should_train)
     num_ftrs = model_ft.fc.in_features
 
     # setting number of params
@@ -281,77 +281,6 @@ def regress(should_train=False, should_test=True):
         regression_visualize_model(model_ft, 24)
 
 
-class SketchInfer:
-    def __init__(self, data_dir):
-        self.model_ft = None
-        self.data_dir = data_dir
-        self.save_name = os.path.basename(data_dir)
-        self.device = None
-        self.regress_data_transforms = {
-            'train': transforms.Compose([
-                transforms.Resize(256),
-                transforms.CenterCrop(224),
-                # transforms.RandomResizedCrop(224),
-                # transforms.RandomHorizontalFlip(),
-                transforms.ToTensor(),
-                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-            ]),
-            'val': transforms.Compose([
-                transforms.Resize(256),
-                transforms.CenterCrop(224),
-                transforms.ToTensor(),
-                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-            ]),
-        }
-
-    def load_model(self):
-        image_datasets = {x: SketchDataSet.SketchDataSet('curve_params.csv', os.path.join(self.data_dir, x),
-                                                         self.regress_data_transforms[x])
-                          for x in ['train']}
-
-        dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=4,
-                                                      shuffle=True, num_workers=4)
-                       for x in ['train']}
-
-        inputs, curve_params = next(iter(dataloaders['train']))
-        # model_ft = models.resnet18(pretrained=True)
-        model_ft = models.resnet101()
-        num_ftrs = model_ft.fc.in_features
-
-        # setting number of params
-        print("Curve parameters size : ", curve_params.shape)
-        output_layer_size = curve_params.shape[1]
-        print("Setting output layer size to : ", output_layer_size)
-        model_ft.fc = nn.Linear(num_ftrs, output_layer_size)
-
-        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        self.model_ft = model_ft.to(self.device)
-        model_name = os.path.join('model', self.save_name + '.pth');
-        self.model_ft.load_state_dict(torch.load(model_name))
-        self.model_ft.eval();
-
-    def infer_imgs(self, img_numpy_arrs):
-        input_list = []
-        num_imgs = img_numpy_arrs.shape[0]
-        for i in range(0, num_imgs):
-            img_numpy = img_numpy_arrs[i]
-            sample = Image.fromarray(img_numpy);
-            input = self.regress_data_transforms['val'](sample)
-            input_list.append(input)
-            sample.save('test' + str(i) + '.png');
-        inputs = torch.stack(input_list, dim=0)
-        inputs = inputs.to(self.device)
-        outputs = self.model_ft(inputs).cpu().detach().numpy()
-        return outputs
-
-    def infer_img(self, img_numpy):
-        sample = Image.fromarray(img_numpy);
-        sample.save('test.png');
-        inputs = self.regress_data_transforms['val'](sample)
-        inputs = inputs.unsqueeze(0)
-        inputs = inputs.to(self.device)
-        outputs = self.model_ft(inputs).cpu().detach().numpy()
-        return outputs[0]
 
 
 if __name__ == '__main__':

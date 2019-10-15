@@ -118,44 +118,52 @@ def classify_train_model(model, criterion, optimizer, scheduler, num_epochs=25):
     model.load_state_dict(best_model_wts)
     return model
 
+def imshow(inp, title=None):
+    """Imshow for Tensor."""
+    inp = inp.numpy().transpose((1, 2, 0))
+    mean = np.array([0.485, 0.456, 0.406])
+    std = np.array([0.229, 0.224, 0.225])
+    inp = std * inp + mean
+    inp = np.clip(inp, 0, 1)
+    plt.imshow(inp)
+    if title is not None:
+        plt.title(title)
+    plt.pause(0.001)  # pause a bit so that plots are updated
 
 def classify_visualize_model(model, num_images=6):
     print("validating")
     model.eval();
     curr_img_cnt = 0
 
-    color = iter(cm.rainbow(np.linspace(0, 1, num_images)))
+    images_so_far = 0
+
+    # color = iter(cm.rainbow(np.linspace(0, 1, num_images)))
 
     with torch.no_grad():
         for i, (inputs, ground_truth) in enumerate(dataloaders['val']):
             inputs = inputs.to(device)
             # grounnd_truth = outputs.to(device)
 
-            outputs = model(inputs).cpu().detach().numpy()
-            ground_truth = ground_truth.cpu().detach().numpy()
+            outputs = model(inputs)
 
-            x = np.arange(outputs.shape[1])
+            _, preds = torch.max(outputs, 1)
 
             for j in range(inputs.size()[0]):
-                c = next(color)
-                c = np.reshape(c, -1)
-                curr_img_cnt += 1
-                ax = plt.subplot(num_images // 4, 4, curr_img_cnt)
-                # plt.scatter(x, outputs[j], s=20, marker='o', c=c)
-                # plt.scatter(x, ground_truth[j], s=20, marker='^', c=c)
-                l1 = plt.plot(x, outputs[j], '.r-', label='predicted')
-                l2 = plt.plot(x, ground_truth[j], 'xb-', label='ground truth')
-                # l1 = plt.plot(x, outputs[j], '.r-')
-                # l2 = plt.plot(x, ground_truth[j], 'xb-')
+                images_so_far += 1
+                ax = plt.subplot(num_images // 10, 10, images_so_far)
+                ax.axis('off')
+                ax.set_title('predicted: {}'.format(class_names[preds[j]]))
+                imshow(inputs.cpu().data[j])
 
-                if curr_img_cnt == num_images:
-                    plt.figlegend(loc='upper left', ncol=1)
-                    plt.show(block=True)
-                    return
+                if images_so_far == num_images:
+                    break
 
-    plt.figlegend(loc='upper left', ncol=1)
-    plt.show(block=True)
-    plt.savefig('val_result.png')
+            if images_so_far == num_images:
+                break
+
+        plt.interactive(False)
+        plt.show(block=True)
+        plt.savefig('classify_val_result.png')
 
 
 # def regression_test(model):
@@ -177,8 +185,9 @@ def classify_visualize_model(model, num_images=6):
 
 
 
+
 def classify(should_train=False, should_test=True):
-    global dataloaders, dataset_sizes, device
+    global dataloaders, dataset_sizes, device, class_names
     # data_dir = 'data/sketch-gen'
 
     image_datasets = {x: datasets.ImageFolder(os.path.join(data_dir, x),
@@ -230,84 +239,10 @@ def classify(should_train=False, should_test=True):
                                        num_epochs=25)
     elif should_test:
         model_ft.load_state_dict(torch.load(model_name))
-        # regression_test(model_ft)
+        classify_visualize_model(model_ft, 20)
     else:
         model_ft.load_state_dict(torch.load(model_name))
         # visualize_model(model_ft, 24)
-
-
-class SketchInfer:
-    def __init__(self, data_dir):
-        self.model_ft = None
-        self.data_dir = data_dir
-        self.save_name = os.path.basename(data_dir)
-        self.device = None
-        self.regress_data_transforms = {
-            'train': transforms.Compose([
-                transforms.Resize(256),
-                transforms.CenterCrop(224),
-                # transforms.RandomResizedCrop(224),
-                # transforms.RandomHorizontalFlip(),
-                transforms.ToTensor(),
-                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-            ]),
-            'val': transforms.Compose([
-                transforms.Resize(256),
-                transforms.CenterCrop(224),
-                transforms.ToTensor(),
-                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-            ]),
-        }
-
-    def load_model(self):
-        image_datasets = {x: SketchDataSet.SketchDataSet('curve_params.csv', os.path.join(self.data_dir, x),
-                                                         self.regress_data_transforms[x])
-                          for x in ['train']}
-
-        dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=4,
-                                                      shuffle=True, num_workers=4)
-                       for x in ['train']}
-
-        inputs, curve_params = next(iter(dataloaders['train']))
-        # model_ft = models.resnet18(pretrained=True)
-        model_ft = models.resnet101()
-        num_ftrs = model_ft.fc.in_features
-
-        # setting number of params
-        print("Curve parameters size : ", curve_params.shape)
-        output_layer_size = curve_params.shape[1]
-        print("Setting output layer size to : ", output_layer_size)
-        model_ft.fc = nn.Linear(num_ftrs, output_layer_size)
-
-        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        self.model_ft = model_ft.to(self.device)
-        model_name = os.path.join('model', self.save_name + '.pth');
-        self.model_ft.load_state_dict(torch.load(model_name))
-        self.model_ft.eval();
-
-    def infer_imgs(self, img_numpy_arrs):
-        input_list = []
-        num_imgs = img_numpy_arrs.shape[0]
-        for i in range(0, num_imgs):
-            img_numpy = img_numpy_arrs[i]
-            sample = Image.fromarray(img_numpy);
-            input = self.regress_data_transforms['val'](sample)
-            input_list.append(input)
-            sample.save('test' + str(i) + '.png');
-        inputs = torch.stack(input_list, dim=0)
-        inputs = inputs.to(self.device)
-        outputs = self.model_ft(inputs).cpu().detach().numpy()
-        return outputs
-
-    def infer_img(self, img_numpy):
-        sample = Image.fromarray(img_numpy);
-        sample.save('test.png');
-        inputs = self.regress_data_transforms['val'](sample)
-        inputs = inputs.unsqueeze(0)
-        inputs = inputs.to(self.device)
-        outputs = self.model_ft(inputs).cpu().detach().numpy()
-        return outputs[0]
-
 
 if __name__ == '__main__':
     global data_dir, test_data_dir, save_name
