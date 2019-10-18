@@ -87,7 +87,6 @@ def regress_train_model(model, criterion, optimizer, scheduler, num_epochs=26):
         # Each epoch has a training and validation phase
         for phase in ['train', 'val']:
             if phase == 'train':
-                scheduler.step()
                 model.train()  # Set model to training mode
             else:
                 model.eval()  # Set model to evaluate mode
@@ -114,6 +113,7 @@ def regress_train_model(model, criterion, optimizer, scheduler, num_epochs=26):
                     if phase == 'train':
                         loss.backward()
                         optimizer.step()
+                        scheduler.step()
 
                 # statistics
                 # print('{} loss item {:.4f} input size : {:d}', loss.item(), inputs.size(0))
@@ -222,8 +222,20 @@ def create_labels_from_csv(filename):
         print(y.shape)
         return y
 
+def get_resnet_model(resnet_type, pretrained):
+    if resnet_type == '101':
+        model_ft = models.resnet101(pretrained=pretrained)
+    elif resnet_type == '18':
+        model_ft = models.resnet18(pretrained=pretrained)
+    elif resnet_type == '50':
+        model_ft = models.resnet50(pretrained=pretrained)
+    elif resnet_type == 'next101':
+        model_ft = models.resnext101_32x8d(pretrained=pretrained)
+    else:
+        raise Exception("Unknown resenet type", resnet_type)
+    return model_ft
 
-def regress(should_train=False, should_test=True):
+def regress(should_train=False, should_test=True, resnet_type='101'):
     global dataloaders, dataset_sizes, device
     # data_dir = 'data/sketch-gen'
     image_datasets = {x: SketchDataSet.SketchDataSet('curve_params.csv', os.path.join(data_dir, x),
@@ -249,7 +261,7 @@ def regress(should_train=False, should_test=True):
     # plt.ion()   # interactive mode
     # imshow(out, title=[class_names for x in classes])
 
-    model_ft = models.resnet18(pretrained=should_train)
+    model_ft = get_resnet_model(resnet_type, should_train)
     num_ftrs = model_ft.fc.in_features
 
     # setting number of params
@@ -289,6 +301,7 @@ if __name__ == '__main__':
     parser.add_argument('--data_dir', type=str, default='data/sketchgen')
     parser.add_argument('--train', action='store_true')
     parser.add_argument('--test', action='store_true')
+    parser.add_argument('--resnet_type', type=str, default='101')
     # parser.add_argument('--train', nargs='?', type=bool, const=False, default=True)
     args = parser.parse_args()
 
@@ -297,7 +310,7 @@ if __name__ == '__main__':
     should_train = args.train
     save_name = os.path.basename(data_dir)
 
-    regress(should_train, args.test)
+    regress(should_train, args.test, args.resnet_type)
 
     # create_labels_from_csv('data/sketch-gen/params.csv')
     # exit(0)
