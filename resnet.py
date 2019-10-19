@@ -113,7 +113,6 @@ def regress_train_model(model, criterion, optimizer, scheduler, num_epochs=26):
                     if phase == 'train':
                         loss.backward()
                         optimizer.step()
-                        scheduler.step()
 
                 # statistics
                 # print('{} loss item {:.4f} input size : {:d}', loss.item(), inputs.size(0))
@@ -121,6 +120,9 @@ def regress_train_model(model, criterion, optimizer, scheduler, num_epochs=26):
                 # running_corrects += torch.sum(preds == labels.data)
                 # running_corrects += (1.0 - math.sqrt((torch.mean(torch.pow(outputs-labels, 2))))) / 1.0
 
+            if phase == 'train':
+                scheduler.step()
+t
             epoch_loss = running_loss / dataset_sizes[phase]
             epoch_acc = 1 - epoch_loss
 
