@@ -122,7 +122,7 @@ def regress_train_model(model, criterion, optimizer, scheduler, num_epochs=26):
 
             if phase == 'train':
                 scheduler.step()
-t
+
             epoch_loss = running_loss / dataset_sizes[phase]
             epoch_acc = 1 - epoch_loss
 
