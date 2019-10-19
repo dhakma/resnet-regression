@@ -231,6 +231,10 @@ def get_resnet_model(resnet_type, pretrained):
         model_ft = models.resnet50(pretrained=pretrained)
     elif resnet_type == 'next101':
         model_ft = models.resnext101_32x8d(pretrained=pretrained)
+    elif resnet_type == 'wide101':
+        model_ft = models.wide_resnet101_2(pretrained=pretrained)
+    elif resnet_type == '152':
+        model_ft = models.resnet152(pretrained=pretrained)
     else:
         raise Exception("Unknown resenet type", resnet_type)
     return model_ft
