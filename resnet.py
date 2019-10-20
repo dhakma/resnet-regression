@@ -241,8 +241,15 @@ def get_resnet_model(resnet_type, pretrained):
         raise Exception("Unknown resenet type", resnet_type)
     return model_ft
 
-def regress(should_train=False, should_test=True, resnet_type='101'):
+#def regress(should_train=False, should_test=True, resnet_type='101'):
+def regress(args):
     global dataloaders, dataset_sizes, device
+
+    should_train = args.train
+    should_test = args.test
+    resnet_type = args.resnet_type
+    gpuid = args.gpuid
+
     # data_dir = 'data/sketch-gen'
     image_datasets = {x: SketchDataSet.SketchDataSet('curve_params.csv', os.path.join(data_dir, x),
                                                      regress_data_transforms[x])
@@ -256,7 +263,7 @@ def regress(should_train=False, should_test=True, resnet_type='101'):
     dataset_sizes = {x: len(image_datasets[x]) for x in ['train', 'val']}
     class_names = image_datasets['train'].curve_param_names
 
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:"+str(gpuid) if torch.cuda.is_available() else "cpu")
 
     # Get a batch of training data
     inputs, curve_params = next(iter(dataloaders['train']))
@@ -308,6 +315,7 @@ if __name__ == '__main__':
     parser.add_argument('--train', action='store_true')
     parser.add_argument('--test', action='store_true')
     parser.add_argument('--resnet_type', type=str, default='101')
+    parser.add_argument('--gpuid', type=int, default=0)
     # parser.add_argument('--train', nargs='?', type=bool, const=False, default=True)
     args = parser.parse_args()
 
@@ -316,7 +324,9 @@ if __name__ == '__main__':
     should_train = args.train
     save_name = os.path.basename(data_dir)
 
-    regress(should_train, args.test, args.resnet_type)
+    #regress(should_train, args.test, args.resnet_type)
+    print(args)
+    regress(args)
 
     # create_labels_from_csv('data/sketch-gen/params.csv')
     # exit(0)
