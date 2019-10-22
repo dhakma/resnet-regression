@@ -23,6 +23,7 @@ import argparse
 from utils import VisdomPlotter
 import pandas as pd
 from matplotlib.pyplot import cm
+from time import ctime
 from PIL import Image
 
 # Data augmentation and normalization for training
@@ -73,16 +74,20 @@ def imshow(inp, title=None):
     plt.pause(0.001)  # pause a bit so that plots are updated
 
 
-def regress_train_model(model, criterion, optimizer, scheduler, num_epochs=26):
+def regress_train_model(model, criterion, optimizer, scheduler, args, num_epochs=26):
     since = time.time()
 
     best_model_wts = copy.deepcopy(model.state_dict())
     best_acc = 0.0
     plotter = VisdomPlotter.VisdomLinePlotter(env_name=save_name)
 
+    start_time = ctime()
+
     for epoch in range(num_epochs):
         print('Epoch {}/{}'.format(epoch, num_epochs - 1))
         print('-' * 10)
+
+        epoch_since = time.time()
 
         # Each epoch has a training and validation phase
         for phase in ['train', 'val']:
@@ -126,8 +131,8 @@ def regress_train_model(model, criterion, optimizer, scheduler, num_epochs=26):
             epoch_loss = running_loss / dataset_sizes[phase]
             epoch_acc = 1 - epoch_loss
 
-            plotter.plot('loss', phase, 'MSE Loss', epoch, epoch_loss)
-            plotter.plot('acc', phase, 'Regression Acc', epoch, epoch_acc)
+            plotter.plot('loss', phase, 'MSE Loss ' + str(args.resnet_type) + '_' + str(start_time), epoch, epoch_loss)
+            plotter.plot('acc', phase, 'Regression Acc ' + str(args.resnet_type) + '_' + str(start_time), epoch, epoch_acc)
 
             print('{} Loss: {:.4f} Acc: {:.4f}'.format(
                 phase, epoch_loss, epoch_acc))
@@ -139,6 +144,9 @@ def regress_train_model(model, criterion, optimizer, scheduler, num_epochs=26):
                 torch.save(best_model_wts, os.path.join('model', save_name + '.pth'))
 
         print()
+        epoch_time_elapsed = time.time() - epoch_since
+        print('Current epoch completed in {:.0f}m {:.0f}s'.format(
+            epoch_time_elapsed // 60, epoch_time_elapsed % 60))
 
     time_elapsed = time.time() - since
     print('Training complete in {:.0f}m {:.0f}s'.format(
@@ -224,6 +232,7 @@ def create_labels_from_csv(filename):
         print(y.shape)
         return y
 
+
 def get_resnet_model(resnet_type, pretrained):
     if resnet_type == '101':
         model_ft = models.resnet101(pretrained=pretrained)
@@ -241,7 +250,8 @@ def get_resnet_model(resnet_type, pretrained):
         raise Exception("Unknown resenet type", resnet_type)
     return model_ft
 
-#def regress(should_train=False, should_test=True, resnet_type='101'):
+
+# def regress(should_train=False, should_test=True, resnet_type='101'):
 def regress(args):
     global dataloaders, dataset_sizes, device
 
@@ -263,7 +273,7 @@ def regress(args):
     dataset_sizes = {x: len(image_datasets[x]) for x in ['train', 'val']}
     class_names = image_datasets['train'].curve_param_names
 
-    device = torch.device("cuda:"+str(gpuid) if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:" + str(gpuid) if torch.cuda.is_available() else "cpu")
 
     # Get a batch of training data
     inputs, curve_params = next(iter(dataloaders['train']))
@@ -296,7 +306,7 @@ def regress(args):
         # Decay LR by a factor of 0.1 every 7 epochs
         exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=7, gamma=0.1)
 
-        model_ft = regress_train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler,
+        model_ft = regress_train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler, args,
                                        num_epochs=25)
     elif should_test:
         model_ft.load_state_dict(torch.load(model_name))
@@ -304,8 +314,6 @@ def regress(args):
     else:
         model_ft.load_state_dict(torch.load(model_name))
         regression_visualize_model(model_ft, 24)
-
-
 
 
 if __name__ == '__main__':
@@ -324,7 +332,7 @@ if __name__ == '__main__':
     should_train = args.train
     save_name = os.path.basename(data_dir)
 
-    #regress(should_train, args.test, args.resnet_type)
+    # regress(should_train, args.test, args.resnet_type)
     print(args)
     regress(args)
 
